@@ -65,7 +65,7 @@ const handler: Handler = async (event) => {
       throw new Error(paymentResult.message || "Error al procesar el pago");
     }
 
-    // Enviamos el estado real del pago de vuelta al frontend
+    // Enviamos el fgfghfhestado real del pago de vuelta al frontend
     return {
       statusCode: 200,
       body: JSON.stringify({
