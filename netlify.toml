@@ -1,0 +1,17 @@
+# Configuración de build para Netlify
+[build]
+  command = "npm run build"
+  publish = "dist"
+  functions = "netlify/functions"
+
+# Configuración para las funciones de Netlify
+# ESTA ES LA PARTE CLAVE que le dice a Netlify cómo construir tu función .ts
+[functions]
+  node_bundler = "esbuild"
+
+# Regla de redirección para nuestro endpoint de la API
+# Esto hace que las solicitudes a /api/* se envíen a nuestra función de backend.
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
