@@ -60,8 +60,8 @@ export const MercadoPagoPayment: React.FC<MercadoPagoPaymentProps> = ({ amount, 
                             setIsProcessing(true);
                             onPaymentFailure(""); // Clear previous errors
                             try {
-                                // The URL /api/process-payment works thanks to the redirect rule in netlify.toml
-                                const response = await fetch('/api/process-payment', {
+                                // **CRITICAL FIX**: Calling the Netlify function directly, bypassing the need for netlify.toml
+                                const response = await fetch('/.netlify/functions/process-payment', {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify(formData),

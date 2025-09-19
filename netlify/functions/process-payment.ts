@@ -1,9 +1,9 @@
-// netlify/functions/process-payment/process-payment.mts
+// This file is our secure backend.
+// It runs on Netlify's servers, not in the user's browser.
 
-// Este es nuestro backend seguro. Se ejecuta en los servidores de Netlify.
 import type { Handler } from "@netlify/functions";
 
-// Definimos la estructura de datos que esperamos del frontend
+// Define the structure of the data we expect from the frontend
 interface PaymentRequestBody {
   token: string;
   issuer_id: string;
@@ -20,16 +20,16 @@ interface PaymentRequestBody {
 }
 
 const handler: Handler = async (event) => {
-  // Solo permitir peticiones POST
+  // Only allow POST requests
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, body: "Method Not Allowed" };
   }
 
-  // Obtenemos el Access Token SECRETO desde las variables de entorno de Netlify
+  // Get the secret Access Token from Netlify's environment variables
   const MERCADO_PAGO_ACCESS_TOKEN = process.env.MERCADO_PAGO_ACCESS_TOKEN;
 
   if (!MERCADO_PAGO_ACCESS_TOKEN) {
-    console.error("El Access Token de Mercado Pago no está configurado.");
+    console.error("Mercado Pago Access Token is not configured.");
     return {
       statusCode: 500,
       body: JSON.stringify({ error: "El procesador de pagos no está configurado correctamente." }),
@@ -39,21 +39,24 @@ const handler: Handler = async (event) => {
   try {
     const formData = JSON.parse(event.body || "{}") as PaymentRequestBody;
 
-    // Estos son los datos que enviaremos a la API de Mercado Pago
+    // Log received data for debugging (without sensitive info)
+    console.log(`Processing payment for amount: ${formData.transaction_amount} with payment method: ${formData.payment_method_id}`);
+
+    // This is the data we send to Mercado Pago's API
     const paymentData = {
       ...formData,
       description: "Compra en Vape del Este",
       statement_descriptor: "VAPEDELESTE",
     };
     
-    // Hacemos la petición de pago real al servidor de Mercado Pago
+    // Make the actual payment request to Mercado Pago's server
     const response = await fetch("https://api.mercadopago.com/v1/payments", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        // Aquí usamos el Access Token SECRETO
+        // Here we use the SECRET Access Token
         "Authorization": `Bearer ${MERCADO_PAGO_ACCESS_TOKEN}`,
-        "X-Idempotency-Key": Math.random().toString(36).substr(2, 9), // Previene pagos duplicados
+        "X-Idempotency-Key": Math.random().toString(36).substring(2, 11), // Prevents duplicate payments
       },
       body: JSON.stringify(paymentData),
     });
@@ -61,11 +64,17 @@ const handler: Handler = async (event) => {
     const paymentResult = await response.json();
 
     if (!response.ok) {
-      console.error("Error en la API de Mercado Pago:", paymentResult);
-      throw new Error(paymentResult.message || "Error al procesar el pago");
+      // Log the full error from Mercado Pago for debugging on the server
+      console.error("Mercado Pago API error:", JSON.stringify(paymentResult, null, 2));
+      
+      // Create a more descriptive error message for the frontend
+      const cause = paymentResult.cause?.[0];
+      const errorMessage = cause ? `Error ${cause.code}: ${cause.description}` : (paymentResult.message || "Error al procesar el pago. Revisa los datos de la tarjeta.");
+      
+      throw new Error(errorMessage);
     }
 
-    // Enviamos el estado real del pago de vuelta al frontend
+    // Send the real status back to the frontend
     return {
       statusCode: 200,
       body: JSON.stringify({
@@ -75,7 +84,7 @@ const handler: Handler = async (event) => {
       }),
     };
   } catch (error: any) {
-    console.error("Error en la función process-payment:", error);
+    console.error("Error in process-payment function:", error);
     return {
       statusCode: 500,
       body: JSON.stringify({ error: error.message || "Ocurrió un error interno en el servidor." }),

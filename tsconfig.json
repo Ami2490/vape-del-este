@@ -21,7 +21,7 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": [
-    "netlify/functions", 
+    "netlify/functions/**/*.ts",
     "components", 
     "services", 
     "contexts", 

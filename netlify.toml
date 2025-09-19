@@ -1,6 +1,6 @@
 # Configuración de build para Netlify
 [build]
-  # Comjhgjhando para construir el sitio
+  # Comando para construir el sitio
   command = "npm run build"
   
   # Directorio donde se encuentra el sitio construido
@@ -14,5 +14,4 @@
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/:splat"
-
   status = 200
