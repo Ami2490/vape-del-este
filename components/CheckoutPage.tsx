@@ -27,7 +27,6 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onReturnToShop }) =>
     setIsRedirecting(true);
     setPaymentError(null);
 
-    // 1. Create a unique order ID and the full order object
     const newOrderId = Math.random().toString(36).substr(2, 9).toUpperCase();
     const newOrder: Order = {
       id: newOrderId,
@@ -36,17 +35,14 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onReturnToShop }) =>
       customerEmail: customerEmail,
       items: cart.map(item => ({ product: item.product, quantity: item.quantity })),
       total: totalPrice,
-      status: 'Pending', // Status is pending until confirmed by Mercado Pago
+      status: 'Pending',
     };
 
-    // 2. Save the pending order to the user's state if logged in
     if (isAuthenticated) {
       addOrder(newOrder);
     }
-    // As a fallback for guests, or to easily retrieve it, save to session storage
     sessionStorage.setItem(`pendingOrder-${newOrderId}`, JSON.stringify(newOrder));
 
-    // 3. Prepare the items in the format Mercado Pago expects
     const preferenceItems = cart.map(item => ({
       id: String(item.product.id),
       title: item.product.name,
@@ -55,7 +51,6 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onReturnToShop }) =>
       currency_id: 'UYU',
     }));
 
-    // 4. Call our backend function to create the payment preference
     try {
         const res = await fetch('/.netlify/functions/create-preference', {
             method: 'POST',
@@ -70,7 +65,6 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onReturnToShop }) =>
 
         const data = await res.json();
         if (data.init_point) {
-            // 5. Redirect the user to Mercado Pago's checkout
             window.location.href = data.init_point;
         } else {
             throw new Error('Respuesta inválida del servidor.');
@@ -104,9 +98,9 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onReturnToShop }) =>
         <h1 className="text-4xl font-black text-center mb-10 text-white uppercase">Finalizar Compra</h1>
 
         <div className="flex flex-col lg:flex-row gap-12">
-            {/* Form Section */}
+            {/* Form & Payment Section */}
             <div className="flex-1 bg-dark-primary p-8 rounded-lg border border-gray-700">
-                <h2 className="text-2xl font-bold text-white mb-6">1. Completa tus datos</h2>
+                <h2 className="text-2xl font-bold text-white mb-6">1. Tus Datos de Contacto</h2>
                  <div className="space-y-4">
                     <div>
                         <label htmlFor="fullName" className="block text-sm font-medium text-gray-300 mb-1">Nombre Completo</label>
@@ -117,22 +111,26 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onReturnToShop }) =>
                         <input id="email" type="email" value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} className="w-full bg-dark-secondary border border-gray-600 rounded-md p-2.5 text-white focus:ring-brand-purple focus:border-brand-purple" placeholder="juan.perez@email.com" required/>
                     </div>
                 </div>
+
                 <div className="mt-8 pt-6 border-t border-gray-700">
-                    <h2 className="text-2xl font-bold text-white mb-4">2. Elige tu método de pago</h2>
+                    <h2 className="text-2xl font-bold text-white mb-4">2. Pago Seguro con Mercado Pago</h2>
                      {paymentError && (
                         <div className="bg-red-500/20 border border-red-500/30 text-red-400 text-sm font-semibold p-3 rounded-lg mb-4">
                             <p>Ocurrió un error: {paymentError}</p>
                         </div>
                     )}
+                    <p className="text-gray-400 mb-4 text-sm">
+                        Al hacer clic en el botón de pago, serás redirigido al sitio seguro de Mercado Pago para completar tu compra. Aceptamos todos los medios de pago disponibles en su plataforma.
+                    </p>
                     <button 
                         type="button" 
                         onClick={handleCheckoutPro}
                         disabled={isRedirecting || !customerName || !customerEmail}
-                        className="w-full bg-[#009ee3] text-white font-bold py-4 px-6 rounded-lg hover:bg-[#0089cc] transition-colors duration-300 disabled:bg-gray-600 disabled:cursor-not-allowed flex items-center justify-center"
+                        className="w-full bg-[#009ee3] text-white font-bold py-4 px-6 rounded-lg hover:bg-[#0089cc] transition-colors duration-300 disabled:bg-gray-600 disabled:cursor-not-allowed flex items-center justify-center text-lg"
                     >
-                        {isRedirecting ? 'Redirigiendo a Mercado Pago...' : 'Pagar con Mercado Pago'}
+                        <img src="https://logospng.org/download/mercado-pago/logo-mercado-pago-256.png" alt="Mercado Pago" className="h-6 w-auto mr-3" />
+                        {isRedirecting ? 'Redirigiendo...' : `Pagar $U ${totalPrice.toLocaleString('es-UY')}`}
                     </button>
-                    <p className="text-xs text-gray-500 mt-2 text-center">Serás redirigido al sitio seguro de Mercado Pago para completar tu compra.</p>
                 </div>
             </div>
 
