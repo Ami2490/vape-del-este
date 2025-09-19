@@ -22,9 +22,10 @@ import { CartProvider, useCart } from './contexts/CartContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { allProducts as initialProducts } from './constants';
 import { getProducts, seedProducts, updateProduct } from './services/productService';
+import { PaymentStatusPage } from './components/PaymentStatusPage';
 import type { Product, Order, Review } from './types';
 
-type View = 'shop' | 'checkout' | 'confirmation' | 'profile' | 'adminLogin' | 'adminPanel';
+type View = 'shop' | 'checkout' | 'confirmation' | 'profile' | 'adminLogin' | 'adminPanel' | 'paymentStatus';
 type AuthModal = 'login' | 'register' | null;
 
 const faqData = [
@@ -34,11 +35,11 @@ const faqData = [
   },
   {
     question: '¿Qué métodos de pago aceptan?',
-    answer: 'Actualmente, el proceso de pago es una simulación. Aceptamos tarjetas de crédito/débito, transferencias bancarias y Mercado Pago de forma simulada para que puedas probar el flujo de compra.',
+    answer: 'Aceptamos todos los métodos de pago a través de la pasarela segura de Mercado Pago, incluyendo tarjetas de crédito/débito y redes de cobranza.',
   },
   {
     question: '¿Realizan envíos a todo el país?',
-    answer: 'Sí, realizamos envíos a todo el Uruguay. Los costos y tiempos de entrega pueden variar según tu ubicación. Esta información se detallará durante el proceso de compra (actualmente simulado).',
+    answer: 'Sí, realizamos envíos a todo el Uruguay. Los costos y tiempos de entrega pueden variar según tu ubicación. Esta información se detallará durante el proceso de compra.',
   },
   {
     question: '¿Cuál es la diferencia entre un Pod Desechable y un Kit Recargable?',
@@ -131,6 +132,8 @@ const AppContent: React.FC = () => {
     const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
     const [brandFilter, setBrandFilter] = useState<string | null>(null);
     const [priceFilter, setPriceFilter] = useState<number>(4000);
+    
+    const [paymentStatusDetails, setPaymentStatusDetails] = useState<{ status: 'success' | 'failure' | 'pending'; params: URLSearchParams } | null>(null);
 
     const { isAuthenticated, user, addOrder } = useAuth();
     const { cart, totalPrice, addToCart } = useCart();
@@ -155,6 +158,26 @@ const AppContent: React.FC = () => {
     useEffect(() => {
         fetchProducts();
     }, [fetchProducts]);
+
+    useEffect(() => {
+        // Handle Mercado Pago return URLs
+        const path = window.location.pathname;
+        const params = new URLSearchParams(window.location.search);
+        const orderIdParam = params.get('external_reference');
+
+        let status: 'success' | 'failure' | 'pending' | null = null;
+        if (path === '/success' && orderIdParam) status = 'success';
+        if (path === '/failure' && orderIdParam) status = 'failure';
+        if (path === '/pending' && orderIdParam) status = 'pending';
+
+        if (status) {
+            setCurrentView('paymentStatus');
+            setPaymentStatusDetails({ status, params });
+            // Clean up URL to avoid re-triggering on refresh
+            window.history.replaceState({}, document.title, window.location.origin);
+        }
+    }, []);
+
 
     useEffect(() => {
         if (!isAgeVerified || showIntro) {
@@ -216,6 +239,7 @@ const AppContent: React.FC = () => {
         }, 0);
     };
     
+    // This handler is now for simulated checkouts or could be removed if only MP is used.
     const handlePlaceOrder = (customerDetails: { name: string, email: string }) => {
         const newOrderId = Math.random().toString(36).substr(2, 9).toUpperCase();
         setOrderId(newOrderId);
@@ -241,6 +265,7 @@ const AppContent: React.FC = () => {
     const handleReturnToShop = () => {
         setCurrentView('shop');
         setOrderId(null);
+        setPaymentStatusDetails(null);
     };
 
     const handleAddReview = async (productId: number, review: Review) => {
@@ -363,9 +388,16 @@ const AppContent: React.FC = () => {
                         </section>
                     </>
                 )}
-                {currentView === 'checkout' && <CheckoutPage onPlaceOrder={handlePlaceOrder} onReturnToShop={handleReturnToShop} />}
+                {currentView === 'checkout' && <CheckoutPage onReturnToShop={handleReturnToShop} />}
                 {currentView === 'confirmation' && orderId && <OrderConfirmationPage orderId={orderId} onReturnToShop={handleReturnToShop} />}
                 {currentView === 'profile' && <ProfilePage onClose={handleReturnToShop} />}
+                {currentView === 'paymentStatus' && paymentStatusDetails && (
+                    <PaymentStatusPage
+                        status={paymentStatusDetails.status}
+                        params={paymentStatusDetails.params}
+                        onReturnToShop={handleReturnToShop}
+                    />
+                )}
             </main>
             
             <Footer onFilterChange={handleFilterChange} onNavClick={handleNavClick} />
