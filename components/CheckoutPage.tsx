@@ -100,7 +100,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onReturnToShop }) =>
         <div className="flex flex-col lg:flex-row gap-12">
             {/* Form & Payment Section */}
             <div className="flex-1 bg-dark-primary p-8 rounded-lg border border-gray-700">
-                <h2 className="text-2xl font-bold text-white mb-6">1. Tus Datos de Contacto</h2>
+                <h2 className="text-2xl font-bold text-white mb-6">1. Tus Datos</h2>
                  <div className="space-y-4">
                     <div>
                         <label htmlFor="fullName" className="block text-sm font-medium text-gray-300 mb-1">Nombre Completo</label>
@@ -113,24 +113,36 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onReturnToShop }) =>
                 </div>
 
                 <div className="mt-8 pt-6 border-t border-gray-700">
-                    <h2 className="text-2xl font-bold text-white mb-4">2. Pago Seguro con Mercado Pago</h2>
+                    <h2 className="text-2xl font-bold text-white mb-6">2. Método de Pago</h2>
+                    
+                    <div className="border-2 border-brand-blue-light bg-dark-secondary p-4 rounded-lg">
+                        <div className="flex items-center">
+                            <input type="radio" id="mp-radio" name="payment-method" value="mp" checked readOnly className="h-5 w-5 text-brand-blue-light focus:ring-0 cursor-default" />
+                            <label htmlFor="mp-radio" className="ml-3 flex items-center">
+                                <img src="https://logospng.org/download/mercado-pago/logo-mercado-pago-256.png" alt="Mercado Pago" className="h-6 w-auto mr-3" />
+                                <span className="font-semibold text-white">Mercado Pago</span>
+                            </label>
+                        </div>
+                        <p className="text-gray-400 mt-2 text-sm pl-8">
+                            Paga de forma segura en el sitio de Mercado Pago. Serás redirigido para completar la compra.
+                        </p>
+                    </div>
+
                      {paymentError && (
-                        <div className="bg-red-500/20 border border-red-500/30 text-red-400 text-sm font-semibold p-3 rounded-lg mb-4">
+                        <div className="bg-red-500/20 border border-red-500/30 text-red-400 text-sm font-semibold p-3 rounded-lg my-4">
                             <p>Ocurrió un error: {paymentError}</p>
                         </div>
                     )}
-                    <p className="text-gray-400 mb-4 text-sm">
-                        Al hacer clic en el botón de pago, serás redirigido al sitio seguro de Mercado Pago para completar tu compra. Aceptamos todos los medios de pago disponibles en su plataforma.
-                    </p>
-                    <button 
-                        type="button" 
-                        onClick={handleCheckoutPro}
-                        disabled={isRedirecting || !customerName || !customerEmail}
-                        className="w-full bg-[#009ee3] text-white font-bold py-4 px-6 rounded-lg hover:bg-[#0089cc] transition-colors duration-300 disabled:bg-gray-600 disabled:cursor-not-allowed flex items-center justify-center text-lg"
-                    >
-                        <img src="https://logospng.org/download/mercado-pago/logo-mercado-pago-256.png" alt="Mercado Pago" className="h-6 w-auto mr-3" />
-                        {isRedirecting ? 'Redirigiendo...' : `Pagar $U ${totalPrice.toLocaleString('es-UY')}`}
-                    </button>
+                    <div className="mt-6">
+                        <button 
+                            type="button" 
+                            onClick={handleCheckoutPro}
+                            disabled={isRedirecting || !customerName || !customerEmail}
+                            className="w-full bg-[#009ee3] text-white font-bold py-4 px-6 rounded-lg hover:bg-[#0089cc] transition-colors duration-300 disabled:bg-gray-600 disabled:cursor-not-allowed flex items-center justify-center text-lg"
+                        >
+                            {isRedirecting ? 'Redirigiendo a Mercado Pago...' : `Continuar a Pago Seguro ($U ${totalPrice.toLocaleString('es-UY')})`}
+                        </button>
+                    </div>
                 </div>
             </div>
 
