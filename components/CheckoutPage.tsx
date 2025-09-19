@@ -59,6 +59,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onReturnToShop }) =>
     try {
         const res = await fetch('/.netlify/functions/create-preference', {
             method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ items: preferenceItems, orderId: newOrderId })
         });
 
@@ -109,11 +110,11 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onReturnToShop }) =>
                  <div className="space-y-4">
                     <div>
                         <label htmlFor="fullName" className="block text-sm font-medium text-gray-300 mb-1">Nombre Completo</label>
-                        <input id="fullName" type="text" value={customerName} onChange={(e) => setCustomerName(e.target.value)} className="w-full bg-dark-secondary border border-gray-600 rounded-md p-2 text-white focus:ring-brand-purple focus:border-brand-purple" placeholder="Juan Pérez" required/>
+                        <input id="fullName" type="text" value={customerName} onChange={(e) => setCustomerName(e.target.value)} className="w-full bg-dark-secondary border border-gray-600 rounded-md p-2.5 text-white focus:ring-brand-purple focus:border-brand-purple" placeholder="Juan Pérez" required/>
                     </div>
                     <div>
                         <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-1">Email</label>
-                        <input id="email" type="email" value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} className="w-full bg-dark-secondary border border-gray-600 rounded-md p-2 text-white focus:ring-brand-purple focus:border-brand-purple" placeholder="juan.perez@email.com" required/>
+                        <input id="email" type="email" value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} className="w-full bg-dark-secondary border border-gray-600 rounded-md p-2.5 text-white focus:ring-brand-purple focus:border-brand-purple" placeholder="juan.perez@email.com" required/>
                     </div>
                 </div>
                 <div className="mt-8 pt-6 border-t border-gray-700">
@@ -143,7 +144,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onReturnToShop }) =>
                          {cart.map(item => (
                             <div key={item.product.id} className="flex justify-between items-center text-sm">
                                 <span className="text-gray-300 flex-1 truncate pr-2">{item.product.name} x{item.quantity}</span>
-                                <span className="text-white font-medium">$U {(parseFloat(item.product.price.replace('$U', '').replace('.', '')) * item.quantity).toLocaleString('es-UY')}</span>
+                                <span className="text-white font-medium">$U {(parseFloat(item.product.price.replace('$U ', '').replace('.', '')) * item.quantity).toLocaleString('es-UY')}</span>
                             </div>
                         ))}
                     </div>

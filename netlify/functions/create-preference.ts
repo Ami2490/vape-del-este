@@ -3,7 +3,8 @@ import { MercadoPagoConfig, Preference } from 'mercadopago';
 import type { Handler } from "@netlify/functions";
 
 interface CartItemPayload {
-    id: string | number;
+    // Fix: Changed id from 'string | number' to 'string' to match MercadoPago SDK type.
+    id: string;
     title: string;
     quantity: number;
     unit_price: number;
