@@ -1,13 +1,13 @@
 # Configuración de build para Netlify
 [build]
+  # Comando para construir el sitio
   command = "npm run build"
+  
+  # Directorio donde se encuentra el sitio construido
   publish = "dist"
+  
+  # Directorio para las funciones serverless (nuestro backend)
   functions = "netlify/functions"
-
-# Configuración para las funciones de Netlify
-# ESTA ES LA PARTE CLAVE que le dice a Netlify cómo construir tu función .ts
-[functions]
-  node_bundler = "esbuild"
 
 # Regla de redirección para nuestro endpoint de la API
 # Esto hace que las solicitudes a /api/* se envíen a nuestra función de backend.

@@ -10,17 +10,17 @@
   },
   "dependencies": {
     "@google/genai": "^1.19.0",
-    "@types/node": "^22.18.5",
     "firebase": "^10.12.2",
+    "mercadopago": "^2.0.10",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
   },
   "devDependencies": {
-    "@netlify/functions": "^3.1.10",
+    "@netlify/functions": "^4.2.5",
     "@types/react": "^18.2.66",
     "@types/react-dom": "^18.2.22",
     "@vitejs/plugin-react": "^4.2.1",
-    "typescript": "^4.9.5",
+    "typescript": "^5.2.2",
     "vite": "^5.2.0"
   }
 }

@@ -3,43 +3,76 @@ import React, { useState } from 'react';
 import { useCart } from '../contexts/CartContext';
 import { ChevronLeftIcon } from './IconComponents';
 import { useAuth } from '../contexts/AuthContext';
-import { MercadoPagoPayment } from './MercadoPagoPayment';
+import type { Order } from '../types';
 
 interface CheckoutPageProps {
-  onPlaceOrder: (customerDetails: { name: string, email: string }) => void;
   onReturnToShop: () => void;
 }
 
-export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onPlaceOrder, onReturnToShop }) => {
+export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onReturnToShop }) => {
   const { cart, totalPrice } = useCart();
-  const { user } = useAuth();
+  const { user, isAuthenticated, addOrder } = useAuth();
   
-  const [paymentMethod, setPaymentMethod] = useState('mp'); // Default to Mercado Pago
   const [customerName, setCustomerName] = useState(user?.name || '');
   const [customerEmail, setCustomerEmail] = useState(user?.email || '');
+  const [isRedirecting, setIsRedirecting] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
 
-
-  const handleFinalizeSimulation = (e: React.FormEvent) => {
-      e.preventDefault();
-      if (cart.length > 0) {
-          onPlaceOrder({ name: customerName, email: customerEmail });
-      }
-  };
-
-  const handlePaymentSuccess = () => {
-    if (cart.length > 0) {
-      onPlaceOrder({ name: customerName, email: customerEmail });
+  const handleCheckoutPro = async () => {
+    if (!customerName || !customerEmail) {
+        setPaymentError("Por favor, completa tu nombre y email antes de pagar.");
+        return;
     }
-  };
+    
+    setIsRedirecting(true);
+    setPaymentError(null);
 
-  const handlePaymentFailure = (errorDetail: string) => {
-    setPaymentError(errorDetail);
-  };
+    const newOrderId = Math.random().toString(36).substr(2, 9).toUpperCase();
+    const newOrder: Order = {
+      id: newOrderId,
+      date: new Date().toLocaleDateString('es-UY'),
+      customerName: customerName,
+      customerEmail: customerEmail,
+      items: cart.map(item => ({ product: item.product, quantity: item.quantity })),
+      total: totalPrice,
+      status: 'Pending',
+    };
 
-  const handlePaymentMethodChange = (method: string) => {
-    setPaymentMethod(method);
-    setPaymentError(null); // Clear errors when switching methods
+    if (isAuthenticated) {
+      addOrder(newOrder);
+    }
+    sessionStorage.setItem(`pendingOrder-${newOrderId}`, JSON.stringify(newOrder));
+
+    const preferenceItems = cart.map(item => ({
+      id: String(item.product.id),
+      title: item.product.name,
+      quantity: item.quantity,
+      unit_price: parseFloat(item.product.price.replace('$U ', '').replace('.', '')),
+      currency_id: 'UYU',
+    }));
+
+    try {
+        const res = await fetch('/.netlify/functions/create-preference', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ items: preferenceItems, orderId: newOrderId })
+        });
+
+        if (!res.ok) {
+            const errorData = await res.json();
+            throw new Error(errorData.error || 'No se pudo generar el link de pago.');
+        }
+
+        const data = await res.json();
+        if (data.init_point) {
+            window.location.href = data.init_point;
+        } else {
+            throw new Error('Respuesta inválida del servidor.');
+        }
+    } catch (error: any) {
+        setPaymentError(error.message);
+        setIsRedirecting(false);
+    }
   };
 
   if (cart.length === 0) {
@@ -64,44 +97,51 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onPlaceOrder, onRetu
 
         <h1 className="text-4xl font-black text-center mb-10 text-white uppercase">Finalizar Compra</h1>
 
-        <form onSubmit={handleFinalizeSimulation} className="flex flex-col lg:flex-row gap-12">
-            {/* Form Section */}
+        <div className="flex flex-col lg:flex-row gap-12">
+            {/* Form & Payment Section */}
             <div className="flex-1 bg-dark-primary p-8 rounded-lg border border-gray-700">
-                <h2 className="text-2xl font-bold text-white mb-6">Detalles de Pago</h2>
+                <h2 className="text-2xl font-bold text-white mb-6">1. Tus Datos</h2>
                  <div className="space-y-4">
                     <div>
                         <label htmlFor="fullName" className="block text-sm font-medium text-gray-300 mb-1">Nombre Completo</label>
-                        <input id="fullName" type="text" value={customerName} onChange={(e) => setCustomerName(e.target.value)} className="w-full bg-dark-secondary border border-gray-600 rounded-md p-2 text-white focus:ring-brand-purple focus:border-brand-purple" placeholder="Juan Pérez" required/>
+                        <input id="fullName" type="text" value={customerName} onChange={(e) => setCustomerName(e.target.value)} className="w-full bg-dark-secondary border border-gray-600 rounded-md p-2.5 text-white focus:ring-brand-purple focus:border-brand-purple" placeholder="Juan Pérez" required/>
                     </div>
                     <div>
                         <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-1">Email</label>
-                        <input id="email" type="email" value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} className="w-full bg-dark-secondary border border-gray-600 rounded-md p-2 text-white focus:ring-brand-purple focus:border-brand-purple" placeholder="juan.perez@email.com" required/>
+                        <input id="email" type="email" value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} className="w-full bg-dark-secondary border border-gray-600 rounded-md p-2.5 text-white focus:ring-brand-purple focus:border-brand-purple" placeholder="juan.perez@email.com" required/>
                     </div>
-                    <div className="pt-4 border-t border-gray-700">
-                        <h3 className="text-lg font-semibold text-white mb-4">Método de Pago</h3>
-                        <div className="flex border-b border-gray-600 mb-4">
-                            <button type="button" onClick={() => handlePaymentMethodChange('card')} className={`px-4 py-2 text-sm font-medium transition-colors ${paymentMethod === 'card' ? 'border-b-2 border-brand-purple text-white' : 'text-gray-400 hover:text-white'}`}>Tarjeta (Simulado)</button>
-                            <button type="button" onClick={() => handlePaymentMethodChange('transfer')} className={`px-4 py-2 text-sm font-medium transition-colors ${paymentMethod === 'transfer' ? 'border-b-2 border-brand-purple text-white' : 'text-gray-400 hover:text-white'}`}>Transferencia (Simulado)</button>
-                            <button type="button" onClick={() => handlePaymentMethodChange('mp')} className={`px-4 py-2 text-sm font-medium transition-colors ${paymentMethod === 'mp' ? 'border-b-2 border-brand-purple text-white' : 'text-gray-400 hover:text-white'}`}>Mercado Pago</button>
+                </div>
+
+                <div className="mt-8 pt-6 border-t border-gray-700">
+                    <h2 className="text-2xl font-bold text-white mb-6">2. Método de Pago</h2>
+                    
+                    <div className="border-2 border-brand-blue-light bg-dark-secondary p-4 rounded-lg">
+                        <div className="flex items-center">
+                            <input type="radio" id="mp-radio" name="payment-method" value="mp" checked readOnly className="h-5 w-5 text-brand-blue-light focus:ring-0 cursor-default" />
+                            <label htmlFor="mp-radio" className="ml-3 flex items-center">
+                                <img src="https://logospng.org/download/mercado-pago/logo-mercado-pago-256.png" alt="Mercado Pago" className="h-6 w-auto mr-3" />
+                                <span className="font-semibold text-white">Mercado Pago</span>
+                            </label>
                         </div>
-                        <div className="p-4 bg-dark-secondary rounded-md min-h-[100px]">
-                            {paymentError && (
-                                <div className="bg-red-500/20 border border-red-500/30 text-red-400 text-sm font-semibold p-3 rounded-lg mb-4">
-                                    <p>Ocurrió un error al procesar el pago.</p>
-                                    <p className="text-xs mt-1">{paymentError}</p>
-                                </div>
-                            )}
-                            {paymentMethod === 'card' && <p className="text-gray-400 text-sm">Funcionalidad de pago con tarjeta próximamente. Por favor, complete los campos y presione "Realizar Pedido" para simular la compra.</p>}
-                            {paymentMethod === 'transfer' && <p className="text-gray-400 text-sm">Datos para transferencia bancaria (simulado):<br/>Banco: Banco Ficticio<br/>N° Cuenta: 123-456-789</p>}
-                            {paymentMethod === 'mp' && (
-                                <MercadoPagoPayment 
-                                    amount={totalPrice}
-                                    customerEmail={customerEmail}
-                                    onPaymentSuccess={handlePaymentSuccess}
-                                    onPaymentFailure={handlePaymentFailure}
-                                />
-                            )}
+                        <p className="text-gray-400 mt-2 text-sm pl-8">
+                            Paga de forma segura en el sitio de Mercado Pago. Serás redirigido para completar la compra.
+                        </p>
+                    </div>
+
+                     {paymentError && (
+                        <div className="bg-red-500/20 border border-red-500/30 text-red-400 text-sm font-semibold p-3 rounded-lg my-4">
+                            <p>Ocurrió un error: {paymentError}</p>
                         </div>
+                    )}
+                    <div className="mt-6">
+                        <button 
+                            type="button" 
+                            onClick={handleCheckoutPro}
+                            disabled={isRedirecting || !customerName || !customerEmail}
+                            className="w-full bg-[#009ee3] text-white font-bold py-4 px-6 rounded-lg hover:bg-[#0089cc] transition-colors duration-300 disabled:bg-gray-600 disabled:cursor-not-allowed flex items-center justify-center text-lg"
+                        >
+                            {isRedirecting ? 'Redirigiendo a Mercado Pago...' : `Continuar a Pago Seguro ($U ${totalPrice.toLocaleString('es-UY')})`}
+                        </button>
                     </div>
                 </div>
             </div>
@@ -114,7 +154,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onPlaceOrder, onRetu
                          {cart.map(item => (
                             <div key={item.product.id} className="flex justify-between items-center text-sm">
                                 <span className="text-gray-300 flex-1 truncate pr-2">{item.product.name} x{item.quantity}</span>
-                                <span className="text-white font-medium">$U {(parseFloat(item.product.price.replace('$U', '').replace('.', '')) * item.quantity).toLocaleString('es-UY')}</span>
+                                <span className="text-white font-medium">$U {(parseFloat(item.product.price.replace('$U ', '').replace('.', '')) * item.quantity).toLocaleString('es-UY')}</span>
                             </div>
                         ))}
                     </div>
@@ -124,14 +164,9 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onPlaceOrder, onRetu
                             <span className="text-brand-blue-light">$U {totalPrice.toLocaleString('es-UY')}</span>
                         </div>
                     </div>
-                     {paymentMethod !== 'mp' && (
-                        <button type="submit" className="w-full mt-6 bg-brand-purple text-white font-bold py-3 rounded-lg hover:bg-purple-700 transition-colors duration-300">
-                           Realizar Pedido
-                       </button>
-                     )}
                 </div>
             </aside>
-        </form>
+        </div>
     </div>
   );
 };
