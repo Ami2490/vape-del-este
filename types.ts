@@ -48,6 +48,14 @@ export interface OrderItem {
   quantity: number;
 }
 
+export interface ShippingAddress {
+  address: string;
+  city: string;
+  department: string;
+  postalCode: string;
+  notes?: string;
+}
+
 export interface Order {
   id: string;
   date: string;
@@ -55,7 +63,8 @@ export interface Order {
   customerEmail: string;
   items: OrderItem[];
   total: number;
-  status: 'Pending' | 'Shipped' | 'Delivered' | 'Cancelled';
+  status: 'Pending' | 'Processing' | 'Shipped' | 'Delivered' | 'Cancelled';
+  shippingAddress?: ShippingAddress;
 }
 
 export interface User {

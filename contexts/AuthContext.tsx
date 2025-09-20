@@ -7,7 +7,6 @@ interface AuthContextType {
   login: (name: string, email: string) => void;
   logout: () => void;
   updateUser: (updatedData: Partial<User>) => void;
-  addOrder: (order: Order) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -46,7 +45,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         email, 
         avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=222831&color=FFFFFF`,
         currency: 'UYU',
-        orders: [],
     };
     setUser(newUser);
   };
@@ -59,16 +57,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setUser(prevUser => prevUser ? { ...prevUser, ...updatedData } : null);
   };
 
-  const addOrder = (order: Order) => {
-    setUser(prevUser => {
-        if (!prevUser) return null;
-        const updatedOrders = [...(prevUser.orders || []), order];
-        return { ...prevUser, orders: updatedOrders };
-    });
-  };
-
   return (
-    <AuthContext.Provider value={{ isAuthenticated: !!user, user, login, logout, updateUser, addOrder }}>
+    <AuthContext.Provider value={{ isAuthenticated: !!user, user, login, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   );
