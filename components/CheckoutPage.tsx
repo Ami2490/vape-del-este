@@ -131,7 +131,6 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onReturnToShop }) =>
                     </div>
                     <div>
                         <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-1">Email</label>
-                        {/* FIX: Corrected typo from setEmail to setCustomerEmail to match the state setter function. */}
                         <input id="email" type="email" value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} className="w-full bg-dark-secondary border border-gray-600 rounded-md p-2.5 text-white focus:ring-brand-purple focus:border-brand-purple" placeholder="juan.perez@email.com" required/>
                     </div>
                 </div>
