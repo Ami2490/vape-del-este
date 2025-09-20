@@ -1,66 +1,225 @@
-<!DOCTYPE html>
-<html lang="es">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vape del Este: Vapeo con Conciencia y Calidad</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            colors: {
-              'dark-primary': '#111111',
-              'dark-secondary': '#1a1a1a',
-              'dark-text': '#e5e7eb',
-              'brand-purple': '#8e44ad',
-              'brand-blue-light': '#3498db',
-              'brand-blue-dark': '#2980b9',
-            },
-            fontFamily: {
-              sans: ['"Roboto"', 'sans-serif'],
-            },
-            boxShadow: {
-              '2xl-top': '0 -20px 25px -5px rgba(0, 0, 0, 0.1), 0 -10px 10px -5px rgba(0, 0, 0, 0.04)',
-            }
-          },
-        },
-      }
-    </script>
-    <style>
-      body {
-        background-image: url('https://images.unsplash.com/photo-1620251731213-95b871274a27?q=80&w=2574&auto=format&fit=crop');
-        background-size: cover;
-        background-position: center center;
-        background-attachment: fixed;
-        background-color: #111111; /* Fallback */
-      }
-    </style>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
-  <script type="importmap">
-{
-  "imports": {
-    "react": "https://aistudiocdn.com/react@^19.1.1",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.1.1/",
-    "react/": "https://aistudiocdn.com/react@^19.1.1/",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.19.0",
-    "firebase/app": "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js",
-    "firebase/firestore": "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js",
-    "firebase/storage": "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js",
-    "firebase/": "https://aistudiocdn.com/firebase@^12.2.1/",
-    "@netlify/functions": "https://aistudiocdn.com/@netlify/functions@^4.2.5",
-    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.0.2",
-    "vite": "https://aistudiocdn.com/vite@^7.1.5",
-    "mercadopago": "https://aistudiocdn.com/mercadopago@^2.9.0",
-    "crypto": "https://aistudiocdn.com/crypto@^1.0.1"
-  }
+import React, { useState } from 'react';
+// Corrected import paths to be relative.
+import { useCart } from '../contexts/CartContext';
+import { ChevronLeftIcon } from './IconComponents';
+import { useAuth } from '../contexts/AuthContext';
+import type { Order, ShippingAddress } from '../types';
+import { createOrderInFirestore } from '../services/orderService';
+
+
+interface CheckoutPageProps {
+  onReturnToShop: () => void;
 }
-</script>
-</head>
-  <body>
-    <div id="root"></div>
-  </body>
-</html>
+
+const uruguayanDepartments = [
+  "Artigas", "Canelones", "Cerro Largo", "Colonia", "Durazno", "Flores",
+  "Florida", "Lavalleja", "Maldonado", "Montevideo", "Paysandú", "Río Negro",
+  "Rivera", "Rocha", "Salto", "San José", "Soriano", "Tacuarembó", "Treinta y Tres"
+];
+
+export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onReturnToShop }) => {
+  const { cart, totalPrice } = useCart();
+  const { user } = useAuth();
+  
+  const [customerName, setCustomerName] = useState(user?.name || '');
+  const [customerEmail, setCustomerEmail] = useState(user?.email || '');
+  const [shippingDetails, setShippingDetails] = useState<ShippingAddress>({
+      address: '',
+      city: '',
+      department: 'Montevideo',
+      postalCode: '',
+      notes: ''
+  });
+
+  const [isRedirecting, setIsRedirecting] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+
+  const handleShippingChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+      const { name, value } = e.target;
+      setShippingDetails(prev => ({...prev, [name]: value}));
+  };
+
+  const isFormValid = customerName && customerEmail && shippingDetails.address && shippingDetails.city && shippingDetails.department && shippingDetails.postalCode;
+
+  const handleCheckoutPro = async () => {
+    if (!isFormValid) {
+        setPaymentError("Por favor, completa todos los campos de datos y envío antes de pagar.");
+        return;
+    }
+    
+    setIsRedirecting(true);
+    setPaymentError(null);
+
+    const newOrderId = Math.random().toString(36).substr(2, 9).toUpperCase();
+    const newOrder: Order = {
+      id: newOrderId,
+      date: new Date().toISOString(),
+      customerName: customerName,
+      customerEmail: customerEmail,
+      items: cart.map(item => ({ product: item.product, quantity: item.quantity })),
+      total: totalPrice,
+      status: 'Pending',
+      shippingAddress: shippingDetails,
+    };
+
+    const preferenceItems = cart.map(item => ({
+      id: String(item.product.id),
+      title: item.product.name,
+      quantity: item.quantity,
+      unit_price: parseFloat(item.product.price.replace('$U ', '').replace('.', '')),
+      currency_id: 'UYU',
+    }));
+
+    try {
+        // First, create the pending order in our database
+        await createOrderInFirestore(newOrder);
+
+        // Then, create the payment preference
+        const res = await fetch('/.netlify/functions/create-preference', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ items: preferenceItems, order: newOrder })
+        });
+
+        if (!res.ok) {
+            const errorData = await res.json();
+            throw new Error(errorData.error || 'No se pudo generar el link de pago.');
+        }
+
+        const data = await res.json();
+        if (data.init_point) {
+            window.location.href = data.init_point;
+        } else {
+            throw new Error('Respuesta inválida del servidor.');
+        }
+    } catch (error: any) {
+        setPaymentError(error.message);
+        setIsRedirecting(false);
+    }
+  };
+
+  if (cart.length === 0) {
+    return (
+        <div className="container mx-auto px-6 py-20 text-center">
+            <h1 className="text-3xl font-bold text-white mb-4">Tu carrito está vacío</h1>
+            <p className="text-gray-400 mb-6">Añade productos a tu carrito antes de finalizar la compra.</p>
+            <button onClick={onReturnToShop} className="bg-brand-purple text-white font-bold py-3 px-8 rounded-lg hover:bg-purple-700">
+                Volver a la Tienda
+            </button>
+        </div>
+    );
+  }
+
+  return (
+    <div className="container mx-auto px-6 py-12 animate-fade-in" style={{animation: 'fade-in 0.5s ease-out'}}>
+        
+        <button onClick={onReturnToShop} className="flex items-center gap-2 text-brand-blue-light hover:underline mb-6">
+            <ChevronLeftIcon className="h-5 w-5" />
+            Volver a la tienda
+        </button>
+
+        <h1 className="text-4xl font-black text-center mb-10 text-white uppercase">Finalizar Compra</h1>
+
+        <div className="flex flex-col lg:flex-row gap-12">
+            {/* Form & Payment Section */}
+            <div className="flex-1 bg-dark-primary p-8 rounded-lg border border-gray-700">
+                <h2 className="text-2xl font-bold text-white mb-6">1. Tus Datos</h2>
+                 <div className="space-y-4">
+                    <div>
+                        <label htmlFor="fullName" className="block text-sm font-medium text-gray-300 mb-1">Nombre Completo</label>
+                        <input id="fullName" type="text" value={customerName} onChange={(e) => setCustomerName(e.target.value)} className="w-full bg-dark-secondary border border-gray-600 rounded-md p-2.5 text-white focus:ring-brand-purple focus:border-brand-purple" placeholder="Juan Pérez" required/>
+                    </div>
+                    <div>
+                        <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-1">Email</label>
+                        <input id="email" type="email" value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} className="w-full bg-dark-secondary border border-gray-600 rounded-md p-2.5 text-white focus:ring-brand-purple focus:border-brand-purple" placeholder="juan.perez@email.com" required/>
+                    </div>
+                </div>
+
+                <div className="mt-8 pt-6 border-t border-gray-700">
+                  <h2 className="text-2xl font-bold text-white mb-6">2. Información de Envío</h2>
+                  <div className="space-y-4">
+                      <div>
+                          <label htmlFor="address" className="block text-sm font-medium text-gray-300 mb-1">Dirección</label>
+                          <input id="address" name="address" type="text" value={shippingDetails.address} onChange={handleShippingChange} className="w-full bg-dark-secondary border border-gray-600 rounded-md p-2.5 text-white focus:ring-brand-purple focus:border-brand-purple" placeholder="Av. 18 de Julio 1234" required/>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label htmlFor="city" className="block text-sm font-medium text-gray-300 mb-1">Ciudad</label>
+                            <input id="city" name="city" type="text" value={shippingDetails.city} onChange={handleShippingChange} className="w-full bg-dark-secondary border border-gray-600 rounded-md p-2.5 text-white focus:ring-brand-purple focus:border-brand-purple" placeholder="Montevideo" required/>
+                        </div>
+                        <div>
+                            <label htmlFor="postalCode" className="block text-sm font-medium text-gray-300 mb-1">Código Postal</label>
+                            <input id="postalCode" name="postalCode" type="text" value={shippingDetails.postalCode} onChange={handleShippingChange} className="w-full bg-dark-secondary border border-gray-600 rounded-md p-2.5 text-white focus:ring-brand-purple focus:border-brand-purple" placeholder="11200" required/>
+                        </div>
+                      </div>
+                      <div>
+                          <label htmlFor="department" className="block text-sm font-medium text-gray-300 mb-1">Departamento</label>
+                          <select id="department" name="department" value={shippingDetails.department} onChange={handleShippingChange} className="w-full bg-dark-secondary border border-gray-600 rounded-md p-2.5 text-white focus:ring-brand-purple focus:border-brand-purple" required>
+                              {uruguayanDepartments.map(dep => <option key={dep} value={dep}>{dep}</option>)}
+                          </select>
+                      </div>
+                       <div>
+                          <label htmlFor="notes" className="block text-sm font-medium text-gray-300 mb-1">Notas Adicionales (Opcional)</label>
+                          <textarea id="notes" name="notes" value={shippingDetails.notes} onChange={handleShippingChange} rows={2} className="w-full bg-dark-secondary border border-gray-600 rounded-md p-2.5 text-white focus:ring-brand-purple focus:border-brand-purple" placeholder="Ej: Dejar en portería, apto 502..."></textarea>
+                      </div>
+                  </div>
+                </div>
+
+                <div className="mt-8 pt-6 border-t border-gray-700">
+                    <h2 className="text-2xl font-bold text-white mb-6">3. Método de Pago</h2>
+                    
+                    <div className="border-2 border-brand-blue-light bg-dark-secondary p-4 rounded-lg">
+                        <div className="flex items-center">
+                            <input type="radio" id="mp-radio" name="payment-method" value="mp" checked readOnly className="h-5 w-5 text-brand-blue-light focus:ring-0 cursor-default" />
+                            <label htmlFor="mp-radio" className="ml-3 flex items-center">
+                                <img src="https://logospng.org/download/mercado-pago/logo-mercado-pago-256.png" alt="Mercado Pago" className="h-6 w-auto mr-3" />
+                                <span className="font-semibold text-white">Mercado Pago</span>
+                            </label>
+                        </div>
+                        <p className="text-gray-400 mt-2 text-sm pl-8">
+                            Paga de forma segura en el sitio de Mercado Pago. Serás redirigido para completar la compra.
+                        </p>
+                    </div>
+
+                     {paymentError && (
+                        <div className="bg-red-500/20 border border-red-500/30 text-red-400 text-sm font-semibold p-3 rounded-lg my-4">
+                            <p>Ocurrió un error: {paymentError}</p>
+                        </div>
+                    )}
+                    <div className="mt-6">
+                        <button 
+                            type="button" 
+                            onClick={handleCheckoutPro}
+                            disabled={isRedirecting || !isFormValid}
+                            className="w-full bg-[#009ee3] text-white font-bold py-4 px-6 rounded-lg hover:bg-[#0089cc] transition-colors duration-300 disabled:bg-gray-600 disabled:cursor-not-allowed flex items-center justify-center text-lg"
+                        >
+                            {isRedirecting ? 'Redirigiendo a Mercado Pago...' : `Continuar a Pago Seguro ($U ${totalPrice.toLocaleString('es-UY')})`}
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {/* Order Summary */}
+            <aside className="w-full lg:w-96">
+                <div className="bg-dark-primary p-8 rounded-lg border border-gray-700 sticky top-24">
+                    <h3 className="text-xl font-bold text-white mb-6">Resumen del Pedido</h3>
+                    <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
+                         {cart.map(item => (
+                            <div key={item.product.id} className="flex justify-between items-center text-sm">
+                                <span className="text-gray-300 flex-1 truncate pr-2">{item.product.name} x{item.quantity}</span>
+                                <span className="text-white font-medium">$U {(parseFloat(item.product.price.replace('$U ', '').replace('.', '')) * item.quantity).toLocaleString('es-UY')}</span>
+                            </div>
+                        ))}
+                    </div>
+                    <div className="mt-6 pt-6 border-t border-gray-600 space-y-3">
+                        <div className="flex justify-between text-lg font-bold">
+                            <span className="text-white">Total</span>
+                            <span className="text-brand-blue-light">$U {totalPrice.toLocaleString('es-UY')}</span>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </div>
+    </div>
+  );
+};
