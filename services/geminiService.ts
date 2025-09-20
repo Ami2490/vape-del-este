@@ -1,10 +1,11 @@
 
+
 import { GoogleGenAI, Type, Chat } from "@google/genai";
 // Corrected import paths for types and constants to be relative.
 import type { AdvisorAnswers, Recommendation, Product } from '../types';
 
-// The API key is obtained from the Vite environment variable VITE_API_KEY.
-const ai = new GoogleGenAI({ apiKey: (import.meta as any).env.VITE_API_KEY });
+// FIX: Per coding guidelines, the API key must be obtained from process.env.API_KEY.
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const recommendationSchema = {
     type: Type.ARRAY,

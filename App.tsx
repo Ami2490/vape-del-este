@@ -133,10 +133,10 @@ const AppContent: React.FC = () => {
     const [brandFilter, setBrandFilter] = useState<string | null>(null);
     const [priceFilter, setPriceFilter] = useState<number>(4000);
     
-    const [paymentStatusDetails, setPaymentStatusDetails] = useState<{ status: 'success' | 'failure' | 'pending'; params: URLSearchParams } | null>(null);
+    const [paymentStatusDetails, setPaymentStatusDetails] = useState<{ status: 'failure' | 'pending'; params: URLSearchParams } | null>(null);
 
-    const { isAuthenticated, user, addOrder } = useAuth();
-    const { cart, totalPrice, addToCart } = useCart();
+    const { isAuthenticated, user } = useAuth();
+    const { addToCart } = useCart();
     
     const fetchProducts = useCallback(async () => {
         setIsLoadingProducts(true);
@@ -160,20 +160,19 @@ const AppContent: React.FC = () => {
     }, [fetchProducts]);
 
     useEffect(() => {
-        // Handle Mercado Pago return URLs
         const path = window.location.pathname;
         const params = new URLSearchParams(window.location.search);
         const orderIdParam = params.get('external_reference');
 
-        let status: 'success' | 'failure' | 'pending' | null = null;
-        if (path === '/success' && orderIdParam) status = 'success';
-        if (path === '/failure' && orderIdParam) status = 'failure';
-        if (path === '/pending' && orderIdParam) status = 'pending';
-
-        if (status) {
+        if (path === '/success' && orderIdParam) {
+            // Webhook handles order state. Just show confirmation.
+            setOrderId(orderIdParam);
+            setCurrentView('confirmation');
+            window.history.replaceState({}, document.title, window.location.origin);
+        } else if ((path === '/failure' || path === '/pending') && orderIdParam) {
+            const status = path.substring(1) as 'failure' | 'pending';
             setCurrentView('paymentStatus');
             setPaymentStatusDetails({ status, params });
-            // Clean up URL to avoid re-triggering on refresh
             window.history.replaceState({}, document.title, window.location.origin);
         }
     }, []);
@@ -237,29 +236,6 @@ const AppContent: React.FC = () => {
             targetElement.scrollIntoView({ behavior: 'smooth' });
           }
         }, 0);
-    };
-    
-    // This handler is now for simulated checkouts or could be removed if only MP is used.
-    const handlePlaceOrder = (customerDetails: { name: string, email: string }) => {
-        const newOrderId = Math.random().toString(36).substr(2, 9).toUpperCase();
-        setOrderId(newOrderId);
-        
-        const newOrder: Order = {
-            id: newOrderId,
-            date: new Date().toLocaleDateString('es-UY'),
-            customerName: customerDetails.name,
-            customerEmail: customerDetails.email,
-            items: cart.map(item => ({ product: item.product, quantity: item.quantity })),
-            total: totalPrice,
-            status: 'Pending',
-        };
-
-        if (isAuthenticated) {
-            addOrder(newOrder);
-        }
-
-        setCurrentView('confirmation');
-        window.scrollTo(0, 0);
     };
     
     const handleReturnToShop = () => {

@@ -3,24 +3,47 @@ import React, { useState } from 'react';
 import { useCart } from '../contexts/CartContext';
 import { ChevronLeftIcon } from './IconComponents';
 import { useAuth } from '../contexts/AuthContext';
-import type { Order } from '../types';
+import type { Order, ShippingAddress } from '../types';
+import { createOrderInFirestore } from '../services/orderService';
+
 
 interface CheckoutPageProps {
   onReturnToShop: () => void;
 }
 
+const uruguayanDepartments = [
+  "Artigas", "Canelones", "Cerro Largo", "Colonia", "Durazno", "Flores",
+  "Florida", "Lavalleja", "Maldonado", "Montevideo", "Paysandú", "Río Negro",
+  "Rivera", "Rocha", "Salto", "San José", "Soriano", "Tacuarembó", "Treinta y Tres"
+];
+
 export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onReturnToShop }) => {
   const { cart, totalPrice } = useCart();
-  const { user, isAuthenticated, addOrder } = useAuth();
+  const { user } = useAuth();
   
   const [customerName, setCustomerName] = useState(user?.name || '');
   const [customerEmail, setCustomerEmail] = useState(user?.email || '');
+  const [shippingDetails, setShippingDetails] = useState<ShippingAddress>({
+      address: '',
+      city: '',
+      department: 'Montevideo',
+      postalCode: '',
+      notes: ''
+  });
+
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
 
+  const handleShippingChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+      const { name, value } = e.target;
+      setShippingDetails(prev => ({...prev, [name]: value}));
+  };
+
+  const isFormValid = customerName && customerEmail && shippingDetails.address && shippingDetails.city && shippingDetails.department && shippingDetails.postalCode;
+
   const handleCheckoutPro = async () => {
-    if (!customerName || !customerEmail) {
-        setPaymentError("Por favor, completa tu nombre y email antes de pagar.");
+    if (!isFormValid) {
+        setPaymentError("Por favor, completa todos los campos de datos y envío antes de pagar.");
         return;
     }
     
@@ -30,18 +53,14 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onReturnToShop }) =>
     const newOrderId = Math.random().toString(36).substr(2, 9).toUpperCase();
     const newOrder: Order = {
       id: newOrderId,
-      date: new Date().toLocaleDateString('es-UY'),
+      date: new Date().toISOString(),
       customerName: customerName,
       customerEmail: customerEmail,
       items: cart.map(item => ({ product: item.product, quantity: item.quantity })),
       total: totalPrice,
       status: 'Pending',
+      shippingAddress: shippingDetails,
     };
-
-    if (isAuthenticated) {
-      addOrder(newOrder);
-    }
-    sessionStorage.setItem(`pendingOrder-${newOrderId}`, JSON.stringify(newOrder));
 
     const preferenceItems = cart.map(item => ({
       id: String(item.product.id),
@@ -52,10 +71,14 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onReturnToShop }) =>
     }));
 
     try {
+        // First, create the pending order in our database
+        await createOrderInFirestore(newOrder);
+
+        // Then, create the payment preference
         const res = await fetch('/.netlify/functions/create-preference', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ items: preferenceItems, orderId: newOrderId })
+            body: JSON.stringify({ items: preferenceItems, order: newOrder })
         });
 
         if (!res.ok) {
@@ -108,12 +131,43 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onReturnToShop }) =>
                     </div>
                     <div>
                         <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-1">Email</label>
+                        {/* FIX: Corrected typo from setEmail to setCustomerEmail to match the state setter function. */}
                         <input id="email" type="email" value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} className="w-full bg-dark-secondary border border-gray-600 rounded-md p-2.5 text-white focus:ring-brand-purple focus:border-brand-purple" placeholder="juan.perez@email.com" required/>
                     </div>
                 </div>
 
                 <div className="mt-8 pt-6 border-t border-gray-700">
-                    <h2 className="text-2xl font-bold text-white mb-6">2. Método de Pago</h2>
+                  <h2 className="text-2xl font-bold text-white mb-6">2. Información de Envío</h2>
+                  <div className="space-y-4">
+                      <div>
+                          <label htmlFor="address" className="block text-sm font-medium text-gray-300 mb-1">Dirección</label>
+                          <input id="address" name="address" type="text" value={shippingDetails.address} onChange={handleShippingChange} className="w-full bg-dark-secondary border border-gray-600 rounded-md p-2.5 text-white focus:ring-brand-purple focus:border-brand-purple" placeholder="Av. 18 de Julio 1234" required/>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label htmlFor="city" className="block text-sm font-medium text-gray-300 mb-1">Ciudad</label>
+                            <input id="city" name="city" type="text" value={shippingDetails.city} onChange={handleShippingChange} className="w-full bg-dark-secondary border border-gray-600 rounded-md p-2.5 text-white focus:ring-brand-purple focus:border-brand-purple" placeholder="Montevideo" required/>
+                        </div>
+                        <div>
+                            <label htmlFor="postalCode" className="block text-sm font-medium text-gray-300 mb-1">Código Postal</label>
+                            <input id="postalCode" name="postalCode" type="text" value={shippingDetails.postalCode} onChange={handleShippingChange} className="w-full bg-dark-secondary border border-gray-600 rounded-md p-2.5 text-white focus:ring-brand-purple focus:border-brand-purple" placeholder="11200" required/>
+                        </div>
+                      </div>
+                      <div>
+                          <label htmlFor="department" className="block text-sm font-medium text-gray-300 mb-1">Departamento</label>
+                          <select id="department" name="department" value={shippingDetails.department} onChange={handleShippingChange} className="w-full bg-dark-secondary border border-gray-600 rounded-md p-2.5 text-white focus:ring-brand-purple focus:border-brand-purple" required>
+                              {uruguayanDepartments.map(dep => <option key={dep} value={dep}>{dep}</option>)}
+                          </select>
+                      </div>
+                       <div>
+                          <label htmlFor="notes" className="block text-sm font-medium text-gray-300 mb-1">Notas Adicionales (Opcional)</label>
+                          <textarea id="notes" name="notes" value={shippingDetails.notes} onChange={handleShippingChange} rows={2} className="w-full bg-dark-secondary border border-gray-600 rounded-md p-2.5 text-white focus:ring-brand-purple focus:border-brand-purple" placeholder="Ej: Dejar en portería, apto 502..."></textarea>
+                      </div>
+                  </div>
+                </div>
+
+                <div className="mt-8 pt-6 border-t border-gray-700">
+                    <h2 className="text-2xl font-bold text-white mb-6">3. Método de Pago</h2>
                     
                     <div className="border-2 border-brand-blue-light bg-dark-secondary p-4 rounded-lg">
                         <div className="flex items-center">
@@ -137,7 +191,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onReturnToShop }) =>
                         <button 
                             type="button" 
                             onClick={handleCheckoutPro}
-                            disabled={isRedirecting || !customerName || !customerEmail}
+                            disabled={isRedirecting || !isFormValid}
                             className="w-full bg-[#009ee3] text-white font-bold py-4 px-6 rounded-lg hover:bg-[#0089cc] transition-colors duration-300 disabled:bg-gray-600 disabled:cursor-not-allowed flex items-center justify-center text-lg"
                         >
                             {isRedirecting ? 'Redirigiendo a Mercado Pago...' : `Continuar a Pago Seguro ($U ${totalPrice.toLocaleString('es-UY')})`}

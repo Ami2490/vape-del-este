@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { saveProduct, deleteProduct as removeProduct } from '../services/productService';
+import { listenToAllOrders } from '../services/orderService';
 import type { Product, Order, User } from '../types';
 import { 
     DashboardIcon, BoxIcon, ClipboardListIcon, UsersIcon, SettingsIcon, 
@@ -17,25 +18,6 @@ type AdminView = 'dashboard' | 'products' | 'orders' | 'customers' | 'sales' | '
 
 const LOW_STOCK_THRESHOLD = 10;
 
-// --- MOCK DATA ---
-const mockOrders: Order[] = [
-    // This data is now for illustrative purposes as real orders would be stored in Firebase.
-];
-
-const mockCustomers: (User & { totalSpent: number })[] = [
-    { name: 'Carlos Vega', email: 'carlos.v@example.com', avatar: 'https://ui-avatars.com/api/?name=Carlos+V&background=8e44ad&color=FFFFFF', orders: [], totalSpent: 12500 },
-    { name: 'Ana Garcia', email: 'ana.g@example.com', avatar: 'https://ui-avatars.com/api/?name=Ana+G&background=3498db&color=FFFFFF', orders: [], totalSpent: 8800 },
-    { name: 'Martín Rojas', email: 'martin.r@example.com', avatar: 'https://ui-avatars.com/api/?name=Martin+R&background=2980b9&color=FFFFFF', orders: [], totalSpent: 21000 },
-    { name: 'Lucía Fernández', email: 'lucia.f@example.com', avatar: 'https://ui-avatars.com/api/?name=Lucia+F&background=e74c3c&color=FFFFFF', orders: [], totalSpent: 5600 },
-];
-
-const initialNotifications = [
-    { id: 1, type: 'order', message: 'Nuevo pedido #A87FF2 recibido de Ana Garcia.', time: 'hace 5 minutos', read: false },
-    { id: 3, type: 'user', message: 'Nuevo usuario registrado: Lucía Fernández.', time: 'hace 3 horas', read: true },
-    { id: 4, type: 'order', message: 'El pedido #C34B1A ha sido marcado como "Enviado".', time: 'ayer', read: true },
-];
-// --- FIN MOCK DATA ---
-
 const StatCard: React.FC<{ title: string; value: string; icon: React.ReactNode }> = ({ title, value, icon }) => (
     <div className="bg-dark-secondary p-6 rounded-lg border border-gray-700 flex items-center gap-4">
         <div className="bg-gray-800 p-3 rounded-full">{icon}</div>
@@ -48,6 +30,7 @@ const StatCard: React.FC<{ title: string; value: string; icon: React.ReactNode }
 
 const statusColors: { [key in Order['status']]: string } = {
     Pending: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+    Processing: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30',
     Shipped: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
     Delivered: 'bg-green-500/20 text-green-400 border-green-500/30',
     Cancelled: 'bg-red-500/20 text-red-400 border-red-500/30',
@@ -147,36 +130,43 @@ const ProductModal: React.FC<{ product: Product | null; onClose: () => void; onS
 export const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, products, refetchProducts }) => {
     const { user } = useAuth();
     const [view, setView] = useState<AdminView>('dashboard');
-    
-    const [orders, setOrders] = useState<Order[]>(() => {
-        const userOrders = user?.orders || [];
-        const combined = [...mockOrders, ...userOrders];
-        return combined.filter((order, index, self) => index === self.findIndex(o => o.id === order.id));
-    });
-
-    const [customers, setCustomers] = useState<User[]>(user ? [user, ...mockCustomers] : mockCustomers);
-    
-    const [notifications, setNotifications] = useState(() => {
-        const lowStockProducts = products.filter(p => p.stock > 0 && p.stock <= LOW_STOCK_THRESHOLD);
-        const lowStockNotifications = lowStockProducts.map((p, i) => ({
-            id: 100 + i,
-            type: 'stock_low' as const,
-            message: `El producto "${p.name}" tiene solo ${p.stock} unidades restantes.`,
-            time: 'justo ahora',
-            read: false,
-        }));
-        const outOfStockProducts = products.filter(p => p.stock === 0);
-        const outOfStockNotifications = outOfStockProducts.map((p, i) => ({
-             id: 200 + i,
-            type: 'stock_out' as const,
-            message: `El producto "${p.name}" se ha quedado sin stock.`,
-            time: 'hace 1 hora',
-            read: false,
-        }));
-        return [...lowStockNotifications, ...outOfStockNotifications, ...initialNotifications];
-    });
-
+    const [orders, setOrders] = useState<Order[]>([]);
+    const [customers, setCustomers] = useState<User[]>([]);
+    const [notifications, setNotifications] = useState<any[]>([]);
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+    
+    useEffect(() => {
+        const unsubscribe = listenToAllOrders((updatedOrders) => {
+            setOrders(updatedOrders);
+            
+            // Generate notifications for new orders
+            if (updatedOrders.length > orders.length && orders.length > 0) {
+                 const newOrder = updatedOrders[0];
+                 setNotifications(prev => [{
+                    id: Date.now(),
+                    type: 'order',
+                    message: `Nuevo pedido #${newOrder.id} recibido de ${newOrder.customerName}.`,
+                    time: 'justo ahora',
+                    read: false,
+                }, ...prev]);
+            }
+
+            // Update customers from orders
+            const uniqueCustomers: { [email: string]: User } = {};
+            updatedOrders.forEach(order => {
+                if (!uniqueCustomers[order.customerEmail]) {
+                    uniqueCustomers[order.customerEmail] = {
+                        name: order.customerName,
+                        email: order.customerEmail,
+                        avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(order.customerName)}&background=8e44ad&color=FFFFFF`,
+                    };
+                }
+            });
+            setCustomers(Object.values(uniqueCustomers));
+        });
+
+        return () => unsubscribe();
+    }, [orders]); 
 
     const stats = useMemo(() => {
         const validOrders = orders.filter(o => o.status !== 'Cancelled');
@@ -193,7 +183,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, products, refe
     const handleSaveProduct = async (updatedProduct: Product, imageFile: File | null) => {
         try {
             await saveProduct(updatedProduct, imageFile);
-            refetchProducts(); // Refetch all products to get the latest state
+            refetchProducts(); 
         } catch (error) {
             console.error("Failed to save product:", error);
             alert("Error al guardar el producto.");
@@ -215,7 +205,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, products, refe
     };
 
     const handleOrderStatusChange = (orderId: string, newStatus: Order['status']) => {
+        // This should be updated in Firestore, which will then trigger the listener
+        // For now, optimistic UI update:
         setOrders(orders.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
+        // TODO: Create `updateOrderStatus` in `orderService` and call it here.
     };
 
     const viewTitles: Record<AdminView, string> = {
@@ -333,11 +326,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, products, refe
                                         <tr key={order.id} className="border-b border-gray-700 hover:bg-dark-secondary/50">
                                             <td className="px-6 py-4 font-medium text-white">#{order.id}</td>
                                             <td className="px-6 py-4">{order.customerName}<br/><span className="text-xs text-gray-400">{order.customerEmail}</span></td>
-                                            <td className="px-6 py-4">{order.date}</td>
+                                            <td className="px-6 py-4">{new Date(order.date).toLocaleString('es-UY')}</td>
                                             <td className="px-6 py-4">$U {order.total.toLocaleString('es-UY')}</td>
                                             <td className="px-6 py-4">
                                                 <select value={order.status} onChange={(e) => handleOrderStatusChange(order.id, e.target.value as Order['status'])} className={`w-full bg-dark-secondary p-2 rounded border ${statusColors[order.status].replace('bg-', 'border-').replace('/20', '')}`}>
                                                     <option value="Pending">Pendiente</option>
+                                                    <option value="Processing">Procesando</option>
                                                     <option value="Shipped">Enviado</option>
                                                     <option value="Delivered">Entregado</option>
                                                     <option value="Cancelled">Cancelado</option>
@@ -415,8 +409,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, products, refe
                                     <tr>
                                         <th className="px-6 py-3">Cliente</th>
                                         <th className="px-6 py-3">Email</th>
-                                        <th className="px-6 py-3">Pedidos Totales</th>
-                                        <th className="px-6 py-3">Gasto Total</th>
                                         <th className="px-6 py-3">Acciones</th>
                                     </tr>
                                 </thead>
@@ -428,8 +420,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onLogout, products, refe
                                                 <span className="font-medium text-white">{customer.name}</span>
                                             </td>
                                             <td className="px-6 py-4">{customer.email}</td>
-                                            <td className="px-6 py-4">{customer.orders?.length || 0}</td>
-                                            <td className="px-6 py-4">$U {(customer as any).totalSpent?.toLocaleString('es-UY') || 0}</td>
                                             <td className="px-6 py-4"><button className="text-brand-blue-light hover:underline text-xs">Ver Perfil</button></td>
                                         </tr>
                                     ))}

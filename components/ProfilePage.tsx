@@ -1,8 +1,9 @@
-import React, { useState, useRef, ChangeEvent } from 'react';
+import React, { useState, useRef, ChangeEvent, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 // Corrected import paths for icon components and types.
 import { UserIcon, CameraIcon, PackageIcon } from './IconComponents';
 import type { User, Order } from '../types';
+import { listenToUserOrders } from '../services/orderService';
 
 interface ProfilePageProps {
   onClose: () => void;
@@ -94,24 +95,34 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onClose }) => {
   };
   
   const PurchasesHistory = () => {
+    const { user } = useAuth();
+    const [orders, setOrders] = useState<Order[]>([]);
     const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+
+    useEffect(() => {
+      if (!user?.email) return;
+      const unsubscribe = listenToUserOrders(user.email, (userOrders) => {
+        setOrders(userOrders);
+      });
+      return () => unsubscribe();
+    }, [user?.email]);
 
     const toggleOrderDetails = (orderId: string) => {
         setExpandedOrderId(prevId => (prevId === orderId ? null : orderId));
     };
 
-    if (!user.orders || user.orders.length === 0) {
+    if (!orders || orders.length === 0) {
         return <div className="text-center text-gray-400 py-8">No has realizado ninguna compra todavía.</div>;
     }
 
     return (
         <div className="space-y-4">
-            {user.orders.slice().reverse().map((order: Order) => (
+            {orders.map((order: Order) => (
                 <div key={order.id} className="bg-dark-secondary border border-gray-700 rounded-lg p-4">
                     <div className="flex justify-between items-center">
                         <div>
                             <p className="font-bold text-white">Orden #{order.id}</p>
-                            <p className="text-sm text-gray-400">Fecha: {order.date}</p>
+                            <p className="text-sm text-gray-400">Fecha: {new Date(order.date).toLocaleDateString('es-UY')}</p>
                         </div>
                         <div className="text-right">
                            <p className="font-semibold text-brand-blue-light">$U {order.total.toLocaleString('es-UY')}</p>
