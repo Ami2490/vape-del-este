@@ -397,6 +397,9 @@ const AppContent: React.FC = () => {
         </div>
     );
 };
+console.log('Variables disponibles:', import.meta.env);
+};
+
 
 const App: React.FC = () => {
   return (
