@@ -135,7 +135,7 @@ const AppContent: React.FC = () => {
     
     const [paymentStatusDetails, setPaymentStatusDetails] = useState<{ status: 'failure' | 'pending'; params: URLSearchParams } | null>(null);
 
-    const { isAuthenticated } = useAuth();
+    const { isAuthenticated, user } = useAuth();
     const { addToCart } = useCart();
     
     const fetchProducts = useCallback(async () => {
@@ -165,10 +165,11 @@ const AppContent: React.FC = () => {
         const orderIdParam = params.get('external_reference');
 
         if (path === '/success' && orderIdParam) {
+            // Webhook handles order state. Just show confirmation.
             setOrderId(orderIdParam);
             setCurrentView('confirmation');
             window.history.replaceState({}, document.title, window.location.origin);
-        } else if ((path === '/failure' || path === '/pending')) {
+        } else if ((path === '/failure' || path === '/pending') && orderIdParam) {
             const status = path.substring(1) as 'failure' | 'pending';
             setCurrentView('paymentStatus');
             setPaymentStatusDetails({ status, params });

@@ -58,7 +58,7 @@ export interface ShippingAddress {
 
 export interface Order {
   id: string;
-  date: string; // ISO String for proper sorting
+  date: string;
   customerName: string;
   customerEmail: string;
   items: OrderItem[];
@@ -72,6 +72,7 @@ export interface User {
   email: string;
   avatar?: string;
   currency?: 'UYU' | 'USD';
+  orders?: Order[];
 }
 
 export interface AdvisorAnswers {

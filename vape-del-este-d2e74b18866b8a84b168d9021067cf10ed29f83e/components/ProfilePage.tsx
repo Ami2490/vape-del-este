@@ -1,9 +1,9 @@
 import React, { useState, useRef, ChangeEvent, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { listenToUserOrders } from '../services/orderService';
 // Corrected import paths for icon components and types.
 import { UserIcon, CameraIcon, PackageIcon } from './IconComponents';
 import type { User, Order } from '../types';
+import { listenToUserOrders } from '../services/orderService';
 
 interface ProfilePageProps {
   onClose: () => void;
@@ -28,7 +28,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onClose }) => {
 
     const handleInputChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
-        setEditedUser(prev => ({ ...prev, [name]: value as any }));
+        setEditedUser(prev => ({ ...prev, [name]: value }));
     };
 
     const handleAvatarChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -95,30 +95,23 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onClose }) => {
   };
   
   const PurchasesHistory = () => {
+    const { user } = useAuth();
     const [orders, setOrders] = useState<Order[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
     const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
 
     useEffect(() => {
-        if (user?.email) {
-            setIsLoading(true);
-            const unsubscribe = listenToUserOrders(user.email, (userOrders) => {
-                setOrders(userOrders);
-                setIsLoading(false);
-            });
-            return () => unsubscribe();
-        }
+      if (!user?.email) return;
+      const unsubscribe = listenToUserOrders(user.email, (userOrders) => {
+        setOrders(userOrders);
+      });
+      return () => unsubscribe();
     }, [user?.email]);
 
     const toggleOrderDetails = (orderId: string) => {
         setExpandedOrderId(prevId => (prevId === orderId ? null : orderId));
     };
-    
-    if (isLoading) {
-        return <div className="text-center text-gray-400 py-8">Cargando historial...</div>;
-    }
 
-    if (orders.length === 0) {
+    if (!orders || orders.length === 0) {
         return <div className="text-center text-gray-400 py-8">No has realizado ninguna compra todavía.</div>;
     }
 

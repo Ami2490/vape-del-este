@@ -1,0 +1,17 @@
+# Configuración de build para Netlify
+[build]
+  # Comando para construir el sitio
+  command = "npm run build"
+  
+  # Directorio donde se encuentra el sitio construido
+  publish = "dist"
+  
+  # Directorio para las funciones serverless (nuestro backend)
+  functions = "netlify/functions"
+
+# Regla de redirección para nuestro endpoint de la API
+# Esto hace que las solicitudes a /api/* se envíen a nuestra función de backend.
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200

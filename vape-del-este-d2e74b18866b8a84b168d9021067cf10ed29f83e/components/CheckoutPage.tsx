@@ -3,8 +3,9 @@ import React, { useState } from 'react';
 import { useCart } from '../contexts/CartContext';
 import { ChevronLeftIcon } from './IconComponents';
 import { useAuth } from '../contexts/AuthContext';
-import { createOrder } from '../services/orderService';
 import type { Order, ShippingAddress } from '../types';
+import { createOrderInFirestore } from '../services/orderService';
+
 
 interface CheckoutPageProps {
   onReturnToShop: () => void;
@@ -52,7 +53,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onReturnToShop }) =>
     const newOrderId = Math.random().toString(36).substr(2, 9).toUpperCase();
     const newOrder: Order = {
       id: newOrderId,
-      date: new Date().toISOString(), // Using ISO string for proper sorting
+      date: new Date().toISOString(),
       customerName: customerName,
       customerEmail: customerEmail,
       items: cart.map(item => ({ product: item.product, quantity: item.quantity })),
@@ -70,14 +71,14 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onReturnToShop }) =>
     }));
 
     try {
-        // First, create the order in Firestore with a 'Pending' status.
-        await createOrder(newOrder);
+        // First, create the pending order in our database
+        await createOrderInFirestore(newOrder);
 
-        // Then, create the payment preference with Mercado Pago.
+        // Then, create the payment preference
         const res = await fetch('/.netlify/functions/create-preference', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ items: preferenceItems, orderId: newOrderId })
+            body: JSON.stringify({ items: preferenceItems, order: newOrder })
         });
 
         if (!res.ok) {
@@ -192,7 +193,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onReturnToShop }) =>
                             disabled={isRedirecting || !isFormValid}
                             className="w-full bg-[#009ee3] text-white font-bold py-4 px-6 rounded-lg hover:bg-[#0089cc] transition-colors duration-300 disabled:bg-gray-600 disabled:cursor-not-allowed flex items-center justify-center text-lg"
                         >
-                            {isRedirecting ? 'Creando pedido y redirigiendo...' : `Continuar a Pago Seguro ($U ${totalPrice.toLocaleString('es-UY')})`}
+                            {isRedirecting ? 'Redirigiendo a Mercado Pago...' : `Continuar a Pago Seguro ($U ${totalPrice.toLocaleString('es-UY')})`}
                         </button>
                     </div>
                 </div>
